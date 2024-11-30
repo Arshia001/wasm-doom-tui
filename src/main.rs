@@ -1,6 +1,7 @@
 use std::{cell::RefCell, rc::Rc, thread, time::Duration};
 
 use anyhow::{Context, Result};
+use random::Source;
 use ratatui::{
     buffer::Buffer,
     crossterm::event::{self, Event, KeyCode, KeyEventKind},
@@ -11,6 +12,7 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
     DefaultTerminal,
 };
+use ratatui_image::protocol::Protocol;
 
 // This needs to be static so it's accessible to the rendering WASM import function.
 // Since we only have one thread, we can safely use an Rc. However, Rust doesn't know
@@ -33,6 +35,8 @@ fn main() -> Result<()> {
 struct App {
     exit: bool,
     last_key: Option<String>,
+    image: Protocol,
+    zoom: u16,
 }
 
 impl App {
@@ -40,6 +44,8 @@ impl App {
         Self {
             exit: false,
             last_key: None,
+            image: Self::image_with_zoom(1),
+            zoom: 1,
         }
     }
 
@@ -61,6 +67,16 @@ impl App {
                 {
                     self.exit = true;
                 }
+                Event::Key(key)
+                    if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('-') =>
+                {
+                    self.set_zoom(self.zoom.saturating_add(1));
+                }
+                Event::Key(key)
+                    if key.kind == KeyEventKind::Press && key.code == KeyCode::Char('+') =>
+                {
+                    self.set_zoom((self.zoom - 1).max(1));
+                }
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
                     self.last_key = Some(key.code.to_string());
                 }
@@ -69,6 +85,32 @@ impl App {
         }
 
         Ok(())
+    }
+
+    fn set_zoom(&mut self, zoom: u16) {
+        self.zoom = zoom;
+        self.image = Self::image_with_zoom(zoom);
+    }
+
+    fn image_with_zoom(zoom: u16) -> Protocol {
+        let mut picker = ratatui_image::picker::Picker::from_fontsize((zoom, zoom * 2));
+        picker.set_protocol_type(ratatui_image::picker::ProtocolType::Halfblocks);
+        // Constant seed generates the same image each time
+        let mut rand = random::default(1235123);
+        let image_data = std::iter::repeat_with(|| [rand.read(), rand.read(), rand.read(), 255])
+            .take(10000)
+            .flatten()
+            .collect();
+        let image = image::DynamicImage::ImageRgba8(
+            image::RgbaImage::from_raw(100, 100, image_data).unwrap(),
+        );
+        picker
+            .new_protocol(
+                image,
+                Rect::new(0, 0, 100, 100),
+                ratatui_image::Resize::Fit(None),
+            )
+            .unwrap()
     }
 
     fn render_frame(&self) -> Result<()> {
@@ -107,5 +149,8 @@ impl Widget for &App {
             .centered()
             .block(block)
             .render(area, buf);
+
+        let image = ratatui_image::Image::new(&self.image);
+        image.render(Rect::new(2, 2, area.width - 4, area.height - 3), buf);
     }
 }
