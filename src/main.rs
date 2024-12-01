@@ -336,6 +336,9 @@ impl Widget for &DoomApp {
         let title = Line::from(vec![
             " WASM DooM in TUI - FPS: ".bold(),
             self.fps.to_string().bold(),
+            " - Protocol: ".bold(),
+            format!("{:?}", self.image_picker.protocol_type()).bold(),
+            " ".bold(),
         ]);
         let instructions = Line::from(vec![
             " Quit ".into(),
