@@ -8,7 +8,13 @@ use std::{
 use anyhow::{Context, Result};
 use ratatui::{
     buffer::Buffer,
-    crossterm::event::{self, Event, KeyCode, KeyEventKind},
+    crossterm::{
+        event::{
+            self, Event, KeyCode, KeyEventKind, KeyboardEnhancementFlags,
+            PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+        },
+        execute,
+    },
     layout::Rect,
     style::Stylize,
     symbols::border,
@@ -68,6 +74,17 @@ struct DoomGlobalState<'a> {
 }
 
 fn main() -> Result<()> {
+    let mut stdout = std::io::stdout();
+    execute!(
+        stdout,
+        PushKeyboardEnhancementFlags(
+            KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                | KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES
+        )
+    )
+    .context("Failed to set up keyboard input")?;
+
     let terminal = ratatui::init();
     TERMINAL.with(move |t| *t.borrow_mut() = Some(terminal));
 
@@ -150,6 +167,9 @@ fn main() -> Result<()> {
     let app_result = global_state.run();
 
     ratatui::restore();
+
+    execute!(stdout, PopKeyboardEnhancementFlags)
+        .context("Failed to restore keyboard input state")?;
 
     app_result
 }
