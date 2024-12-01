@@ -47,6 +47,10 @@ struct DoomApp {
 
     started_at: Instant,
     memory: Memory,
+
+    last_second: Instant,
+    frames_since_last_second: u16,
+    fps: u16,
 }
 
 /// The exported functions we call to control the game's state.
@@ -87,6 +91,10 @@ fn main() -> Result<()> {
 
             started_at: Instant::now(),
             memory: memory.clone(),
+
+            last_second: Instant::now(),
+            frames_since_last_second: 0,
+            fps: 0,
         }
     };
 
@@ -284,6 +292,20 @@ fn draw_screen(mut env: FunctionEnvMut<DoomApp>, offset: i32) {
             .unwrap(),
     );
 
+    const ONE_SECOND: Duration = Duration::from_secs(1);
+    if app.last_second.elapsed() < ONE_SECOND {
+        app.frames_since_last_second += 1;
+    } else {
+        let mut seconds = 0;
+        // In the odd case that we jumped more than one second since the last frame...
+        while app.last_second.elapsed() >= ONE_SECOND {
+            app.last_second = app.last_second.checked_add(ONE_SECOND).unwrap();
+            seconds += 1
+        }
+        app.fps = app.frames_since_last_second / seconds;
+        app.frames_since_last_second = 0;
+    }
+
     TERMINAL
         .with(|t| {
             t.borrow_mut()
@@ -299,7 +321,10 @@ fn draw_screen(mut env: FunctionEnvMut<DoomApp>, offset: i32) {
 
 impl Widget for &DoomApp {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let title = Line::from(" WASM DooM in TUI ".bold());
+        let title = Line::from(vec![
+            " WASM DooM in TUI - FPS: ".bold(),
+            self.fps.to_string().bold(),
+        ]);
         let instructions = Line::from(vec![
             " Quit ".into(),
             "<Q>".blue().bold(),
