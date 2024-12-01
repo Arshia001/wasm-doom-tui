@@ -75,8 +75,20 @@ fn main() -> Result<()> {
     let memory = Memory::new(&mut store, MemoryType::new(MEMORY_PAGES, None, false))?;
 
     let doom_app = {
-        let picker = Picker::from_query_stdio()
-            .context("Failed to query terminal's image rendering capabilities")?;
+        let picker = {
+            match Picker::from_query_stdio() {
+                Ok(picker) => picker,
+                Err(ratatui_image::errors::Errors::NoFontSize) => {
+                    // Just pick a default at random... needs to be done on Windows
+                    Picker::from_fontsize((8, 16))
+                }
+                e @ Err(_) => {
+                    // TODO: is there a better way to do this?
+                    _ = e.context("Failed to query terminal's image rendering capabilities")?;
+                    unreachable!();
+                }
+            }
+        };
 
         DoomApp {
             exit: false,
